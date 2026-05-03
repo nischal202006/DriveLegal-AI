@@ -146,4 +146,32 @@
           </div>
         </div>
 
+        <!-- Map Panel -->
+        <div class="panel map-panel" id="p-map">
+          <div class="map-search-bar">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="text" id="map-search" placeholder="Search any place in India...">
+          </div>
+          <div id="map-view"></div>
+          
+          <button class="fab-btn" id="btn-locate" aria-label="My Location">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+          
+          <div class="bottom-sheet" id="map-bottom-sheet">
+            <div class="sheet-handle"></div>
+            <div class="sheet-content">
+              <h3 id="sheet-title">Location Info</h3>
+              <p id="sheet-desc">Select a location on the map to see safety data.</p>
+              
+              <div class="sheet-tabs" style="display: none;" id="sheet-tabs">
+                <button class="sheet-tab active" data-target="routing">Directions</button>
+                <button class="sheet-tab" data-target="hazards">Hazards</button>
+              </div>
+              
+              <div class="sheet-body" id="sheet-body"></div>
+            </div>
+          </div>
+        </div>
+
         
