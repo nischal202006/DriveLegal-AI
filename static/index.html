@@ -174,4 +174,72 @@
           </div>
         </div>
 
+        <!-- Calculator Panel -->
+        <div class="panel calc-panel" id="p-calculator">
+          <div class="calc-container">
+            <h2>Challan Calculator</h2>
+            <p class="calc-subtitle">Select violations to calculate fines based on vehicle and state.</p>
+            
+            <div class="form-group">
+              <label data-i18n="state">State / Union Territory</label>
+              <select id="calc-state">
+                <option value="national" data-i18n="national_default">National (Default)</option>
+                <!-- Filled dynamically -->
+              </select>
+            </div>
+            
+            <div class="form-row">
+              <div class="form-group">
+                <label data-i18n="vehicle_type">Vehicle Type</label>
+                <select id="calc-vehicle">
+                  <option value="two_wheeler">Two Wheeler</option>
+                  <option value="car" selected>Car / LMV</option>
+                  <option value="auto_rickshaw">Auto Rickshaw</option>
+                  <option value="commercial">Commercial / Taxi</option>
+                  <option value="truck">Truck / Heavy</option>
+                  <option value="bus">Bus</option>
+                </select>
+              </div>
+              
+              <div class="form-group">
+                <label>Offense Type</label>
+                <div class="radio-group">
+                  <label class="radio-btn">
+                    <input type="radio" name="offense_type" value="first" checked>
+                    <span>First</span>
+                  </label>
+                  <label class="radio-btn">
+                    <input type="radio" name="offense_type" value="repeat">
+                    <span>Repeat</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+            
+            <div class="form-group">
+              <label>Violations</label>
+              <div class="violation-selector">
+                <div class="selected-violations" id="selected-violations">
+                  <span class="placeholder-text">Select at least one violation...</span>
+                </div>
+                <div class="violation-dropdown" id="violation-list">
+                  <!-- Filled dynamically -->
+                </div>
+              </div>
+            </div>
+            
+            <button class="primary-btn full-width" id="btn-calculate" data-i18n="calculate">Calculate Fine</button>
+            
+            <div class="calc-results" id="calc-results" style="display: none;">
+              <h3>Results</h3>
+              <div class="result-breakdown" id="result-breakdown"></div>
+              <div class="result-total">
+                <span>Total Fine:</span>
+                <span class="total-amt" id="result-total-amt">Rs. 0</span>
+              </div>
+              <button class="secondary-btn full-width mt-4" id="btn-compare" style="display: none;">Compare across states</button>
+            </div>
+          </div>
+        </div>
+
         
