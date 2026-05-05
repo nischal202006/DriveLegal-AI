@@ -96,4 +96,69 @@ class ChallanCalculator:
         }
 
     # â”€â”€ Multiple violations â”€â”€
-    
+    def calculate_multiple(self, violations_list, vehicle_type='car',
+                           state_key=None, is_repeat=False):
+        """Calculate fines for a list of violations and return a summary."""
+        results = []
+        grand_total = 0
+        for vk in violations_list:
+            r = self.calculate(vk, vehicle_type, state_key, is_repeat)
+            if 'error' not in r:
+                grand_total += r['total_fine']
+            results.append(r)
+        return {
+            'violations': results,
+            'count': len(results),
+            'grand_total': grand_total,
+            'vehicle_type': vehicle_type,
+            'state': state_key or 'national',
+            'is_repeat': is_repeat,
+        }
+
+    # â”€â”€ Cross-state comparison â”€â”€
+    def compare_states(self, violation_key, vehicle_type='car', is_repeat=False):
+        """Compare fine for a violation across all states."""
+        if not self.db:
+            return {'error': 'Database not loaded'}
+
+        national = self.calculate(violation_key, vehicle_type, None, is_repeat)
+        if 'error' in national:
+            return national
+
+        states = self.db.get_all_state_keys()
+        comparison = [{'state': 'National (Default)', 'fine': national['total_fine']}]
+        for sk in states:
+            r = self.calculate(violation_key, vehicle_type, sk, is_repeat)
+            comparison.append({
+                'state': r.get('state_label', sk),
+                'fine': r['total_fine'],
+            })
+
+        comparison.sort(key=lambda x: x['fine'])
+        return {
+            'violation': national['violation_name'],
+            'section': national['section'],
+            'vehicle_type': vehicle_type,
+            'is_repeat': is_repeat,
+            'comparison': comparison,
+            'lowest': comparison[0],
+            'highest': comparison[-1],
+        }
+
+    # â”€â”€ Speed limit info â”€â”€
+    def get_speed_limits(self, vehicle_type='car', road_type='highway'):
+        """Return speed limits by vehicle type and road type."""
+        limits = {
+            'highway': {'car': 100, 'two_wheeler': 80, 'bus': 80, 'truck': 60, 'auto_rickshaw': 40},
+            'urban': {'car': 50, 'two_wheeler': 40, 'bus': 40, 'truck': 30, 'auto_rickshaw': 30},
+            'residential': {'car': 30, 'two_wheeler': 25, 'bus': 25, 'truck': 20, 'auto_rickshaw': 20},
+        }
+        road_limits = limits.get(road_type, limits['urban'])
+        return {
+            'vehicle_type': vehicle_type,
+            'road_type': road_type,
+            'speed_limit_kmh': road_limits.get(vehicle_type, 50),
+            'all_limits': road_limits,
+        }
+
+
