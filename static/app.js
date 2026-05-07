@@ -170,4 +170,62 @@ function updateMapTiles() {
   }).addTo(MAP);
 }
 
+/* Chat */
+function appendMessage(text, isUser = false) {
+  const msgs = $('chat-msgs');
+  const div = document.createElement('div');
+  div.className = `message ${isUser ? 'user' : 'ai'}`;
+  
+  // Convert basic markdown (bold)
+  let formattedText = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+  // Format lists
+  formattedText = formattedText.replace(/â€¢ (.*?)(?=\n|$)/g, '<li>$1</li>');
+  if(formattedText.includes('<li>')) formattedText = `<ul>${formattedText}</ul>`;
+  // Format newlines
+  formattedText = formattedText.replace(/\n/g, '<br>');
+  
+  div.innerHTML = `<div class="msg-bubble">${formattedText}</div>`;
+  
+  // Remove suggestion chips if they exist
+  const chips = $('chat-suggestions');
+  if (chips && isUser) chips.style.display = 'none';
+  
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function sendChat(message) {
+  appendMessage(message, true);
+  
+  // Show typing indicator
+  const typingId = 'typing-' + Date.now();
+  const msgs = $('chat-msgs');
+  const typing = document.createElement('div');
+  typing.className = 'message ai typing-indicator';
+  typing.id = typingId;
+  typing.innerHTML = '<div class="msg-bubble"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>';
+  msgs.appendChild(typing);
+  msgs.scrollTop = msgs.scrollHeight;
+  
+  const headers = { 'Content-Type': 'application/json' };
+  const token = localStorage.getItem('dl_token');
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  
+  fetch(API + '/api/chat', {
+    method: 'POST',
+    headers: headers,
+    body: JSON.stringify({ message: message })
+  })
+  .then(r => r.json())
+  .then(data => {
+    $(typingId).remove();
+    appendMessage(data.text || 'Sorry, I could not process that request.');
+  })
+  .catch(err => {
+    $(typingId).remove();
+    appendMessage('Network error. Operating in offline mode. What is the fine for driving without a helmet?');
+    $('offline-badge').style.display = 'flex';
+  });
+}
+
 
