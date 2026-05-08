@@ -300,4 +300,44 @@ def hazards():
         return jsonify(hazards)
 
 
+# --- Dashboard ---
+@app.route('/api/user/dashboard', methods=['GET'])
+@token_required
+def get_dashboard(user_id):
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT safety_score, full_name, email FROM users WHERE id = ?', (user_id,))
+    user = cursor.fetchone()
+    
+    cursor.execute('SELECT COUNT(*) as count FROM chat_history WHERE user_id = ?', (user_id,))
+    chat_count = cursor.fetchone()['count']
+    
+    cursor.execute('SELECT COUNT(*) as count FROM community_hazards WHERE user_id = ?', (user_id,))
+    hazard_count = cursor.fetchone()['count']
+    
+    return jsonify({
+        'user': dict(user),
+        'stats': {
+            'queries': chat_count,
+            'reports': hazard_count,
+            'violations_scanned': 0 # Placeholder for AI scanner feature
+        }
+    })
+
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))
+    use_ssl = int(os.environ.get('USE_SSL', 0))
+    
+    print(f"\n[*] DriveLegal.ai Server starting on port {port}")
+    print(f"[*] Environment: {os.environ.get('FLASK_ENV', 'development')}")
+    print(f"[*] AI Engine: {'ONLINE' if nlp.gemini_model else 'OFFLINE FALLBACK'}")
+    
+    if use_ssl and os.path.exists('ssl/drivelegal.crt') and os.path.exists('ssl/drivelegal.key'):
+        print(f"[*] Mode: HTTPS (SSL Enabled)")
+        app.run(host='0.0.0.0', port=port, ssl_context=('ssl/drivelegal.crt', 'ssl/drivelegal.key'))
+    else:
+        print(f"[*] Mode: HTTP")
+        app.run(host='0.0.0.0', port=port)
+
 
