@@ -158,4 +158,58 @@ class NLPEngine:
             except Exception as e:
                 print(f"Gemini API Error: {e}. Falling back to rule-based engine.")
 
-        # â”€â”€ 
+        # â”€â”€ OFFLINE RULE-BASED FALLBACK â”€â”€
+        return self._process_fallback(message, session_id, start_time)
+
+    def _process_fallback(self, message, session_id, start_time):
+        """Rule-based fallback when offline or API fails."""
+        msg = message.lower()
+        
+        if self.fallback_patterns['emergency'].search(msg):
+            text = (
+                "EMERGENCY CONTACTS (India):\n"
+                "â€¢ Police: 100 or 112\n"
+                "â€¢ Ambulance: 108\n"
+                "â€¢ Highway Rescue: 1033\n"
+                "If you are in an accident, move to safety, turn on hazard lights, and call 112 immediately."
+            )
+            return {'text': text, 'data': {'type': 'emergency'}, 'confidence': 'High', 'latency_ms': int((time.time() - start_time) * 1000)}
+            
+        if self.fallback_patterns['helmet'].search(msg):
+            text = "Driving without a helmet is a violation of Section 129 of the Motor Vehicles Act. The national fine is Rs. 1000, and your license may be disqualified for 3 months."
+            return {'text': text, 'data': {'violation_key': 'no_helmet'}, 'confidence': 'Medium', 'latency_ms': int((time.time() - start_time) * 1000)}
+
+        if self.fallback_patterns['seatbelt'].search(msg):
+            text = "Driving without a seatbelt violates Section 194B of the MV Act. The standard fine is Rs. 1000."
+            return {'text': text, 'data': {'violation_key': 'no_seatbelt'}, 'confidence': 'Medium', 'latency_ms': int((time.time() - start_time) * 1000)}
+            
+        if self.fallback_patterns['drunk'].search(msg):
+            text = "Drunk driving (BAC > 30mg/100ml) is a serious offense under Section 185. First offense: Rs. 10,000 fine and/or 6 months imprisonment. Repeat offense: Rs. 15,000 and/or 2 years imprisonment."
+            return {'text': text, 'data': {'violation_key': 'drunk_driving'}, 'confidence': 'Medium', 'latency_ms': int((time.time() - start_time) * 1000)}
+            
+        if self.fallback_patterns['speeding'].search(msg):
+            text = "Overspeeding falls under Section 183. Fines vary by vehicle type: Rs. 1000-2000 for Light Motor Vehicles (LMVs) and Rs. 2000-4000 for Medium/Heavy vehicles."
+            return {'text': text, 'data': {'violation_key': 'overspeeding'}, 'confidence': 'Medium', 'latency_ms': int((time.time() - start_time) * 1000)}
+
+        if self.fallback_patterns['license'].search(msg):
+            text = "Driving without a valid license violates Section 3/181. The penalty is a fine of Rs. 5000."
+            return {'text': text, 'data': {'violation_key': 'no_license'}, 'confidence': 'Medium', 'latency_ms': int((time.time() - start_time) * 1000)}
+            
+        if self.fallback_patterns['phone'].search(msg):
+            text = "Using a mobile phone while driving is considered dangerous driving (Section 184). The fine is Rs. 1000-5000, and it may include imprisonment up to 1 year."
+            return {'text': text, 'data': {'violation_key': 'mobile_phone'}, 'confidence': 'Medium', 'latency_ms': int((time.time() - start_time) * 1000)}
+            
+        if self.fallback_patterns['signal'].search(msg):
+            text = "Jumping a red light is a violation of road regulations (Section 177/184). The typical fine ranges from Rs. 500 to Rs. 1000."
+            return {'text': text, 'data': {'violation_key': 'red_light'}, 'confidence': 'Medium', 'latency_ms': int((time.time() - start_time) * 1000)}
+
+        # Generic fallback
+        text = "I am operating in offline mode. I can answer basic queries about common traffic violations like helmets, seatbelts, speeding, and drunk driving. What do you need help with?"
+        return {
+            'text': text,
+            'data': {'type': 'generic_fallback'},
+            'confidence': 'Low',
+            'latency_ms': int((time.time() - start_time) * 1000)
+        }
+
+
