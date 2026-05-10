@@ -228,4 +228,116 @@ function sendChat(message) {
   });
 }
 
+/* Calculator */
+let CACHED_VIOLATIONS = null;
+let CACHED_STATES = null;
+
+function loadCalcData() {
+  if (CACHED_VIOLATIONS) return;
+  
+  // Load States
+  fetch(API + '/api/states')
+    .then(r => r.json())
+    .then(data => {
+      CACHED_STATES = data;
+      const select = $('calc-state');
+      Object.keys(data).forEach(key => {
+        const opt = document.createElement('option');
+        opt.value = key;
+        opt.innerText = data[key];
+        select.appendChild(opt);
+      });
+    }).catch(e => console.log('Offline: cannot load states'));
+    
+  // Load Violations
+  fetch(API + '/api/violations')
+    .then(r => r.json())
+    .then(data => {
+      CACHED_VIOLATIONS = data;
+      const list = $('violation-list');
+      Object.keys(data).forEach(key => {
+        const item = document.createElement('div');
+        item.className = 'violation-item';
+        item.innerHTML = `
+          <label>
+            <input type="checkbox" value="${key}" class="viol-cb">
+            <span>${data[key]}</span>
+          </label>
+        `;
+        list.appendChild(item);
+      });
+      
+      // Add event listeners to checkboxes
+      document.querySelectorAll('.viol-cb').forEach(cb => {
+        cb.addEventListener('change', updateSelectedViolations);
+      });
+    }).catch(e => console.log('Offline: cannot load violations'));
+}
+
+function updateSelectedViolations() {
+  const selected = [];
+  document.querySelectorAll('.viol-cb:checked').forEach(cb => {
+    selected.push(cb.nextElementSibling.innerText);
+  });
+  
+  const container = $('selected-violations');
+  if (selected.length === 0) {
+    container.innerHTML = '<span class="placeholder-text">Select at least one violation...</span>';
+  } else {
+    container.innerHTML = selected.map(v => `<span class="chip">${v}</span>`).join('');
+  }
+}
+
+function calculateFine() {
+  const violations = Array.from(document.querySelectorAll('.viol-cb:checked')).map(cb => cb.value);
+  
+  if (violations.length === 0) {
+    showToast('Please select at least one violation', 'error');
+    return;
+  }
+  
+  const state = $('calc-state').value;
+  const vehicle = $('calc-vehicle').value;
+  const isRepeat = document.querySelector('input[name="offense_type"]:checked').value === 'repeat';
+  
+  const payload = {
+    violations: violations,
+    vehicle_type: vehicle,
+    is_repeat: isRepeat
+  };
+  if (state !== 'national') payload.state = state;
+  
+  fetch(API + '/api/calculate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.error) throw new Error(data.error);
+    
+    const results = $('calc-results');
+    const breakdown = $('result-breakdown');
+    
+    breakdown.innerHTML = data.violations.map(v => `
+      <div class="fine-row">
+        <div>
+          <strong>${v.violation_name}</strong>
+          <div class="text-sm text-muted">Sec ${v.section}</div>
+        </div>
+        <div class="text-right">
+          <strong>Rs. ${v.total_fine}</strong>
+        </div>
+      </div>
+    `).join('');
+    
+    $('result-total-amt').innerText = `Rs. ${data.grand_total}`;
+    results.style.display = 'block';
+    results.scrollIntoView({ behavior: 'smooth' });
+  })
+  .catch(err => {
+    showToast('Failed to calculate fine. Check connection.', 'error');
+  });
+}
+
 
