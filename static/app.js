@@ -340,4 +340,188 @@ function calculateFine() {
   });
 }
 
+/* Dashboard & Auth */
+function checkAuth() {
+  const token = localStorage.getItem('dl_token');
+  const userStr = localStorage.getItem('dl_user');
+  
+  if (token && userStr) {
+    const user = JSON.parse(userStr);
+    $('display-name').innerText = user.full_name || user.email;
+    $('display-action').innerText = 'View Profile';
+    $('btn-auth-action').innerText = 'Sign Out';
+    $('btn-auth-action').classList.add('text-danger');
+    $('dash-auth-required').style.display = 'none';
+    $('dash-content').style.display = 'block';
+  } else {
+    $('display-name').innerText = 'Guest';
+    $('display-action').innerText = 'Tap to sign in';
+    $('btn-auth-action').innerText = 'Sign In';
+    $('btn-auth-action').classList.remove('text-danger');
+    $('dash-auth-required').style.display = 'flex';
+    $('dash-content').style.display = 'none';
+  }
+}
+
+function handleAuth() {
+  const isLogin = $('auth-title').innerText === 'Sign In';
+  const email = $('auth-email').value;
+  const password = $('auth-password').value;
+  const name = $('auth-name').value;
+  
+  const endpoint = isLogin ? '/api/auth/login' : '/api/auth/register';
+  const payload = { email, password };
+  if (!isLogin) payload.full_name = name;
+  
+  fetch(API + endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.error) throw new Error(data.error);
+    
+    if (isLogin) {
+      localStorage.setItem('dl_token', data.token);
+      localStorage.setItem('dl_user', JSON.stringify(data.user));
+      $('auth-modal').classList.remove('active');
+      checkAuth();
+      showToast('Signed in successfully');
+      if (CURRENT_PANEL === 'dashboard') loadDashboard();
+    } else {
+      showToast('Account created! Please sign in.');
+      $('btn-auth-toggle').click(); // Switch to login
+    }
+  })
+  .catch(err => {
+    showToast(err.message, 'error');
+  });
+}
+
+function loadDashboard() {
+  const token = localStorage.getItem('dl_token');
+  if (!token) return;
+  
+  fetch(API + '/api/user/dashboard', {
+    headers: { 'Authorization': `Bearer ${token}` }
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.stats) {
+      $('stat-queries').innerText = data.stats.queries || 0;
+      $('stat-reports').innerText = data.stats.reports || 0;
+      
+      const score = data.user.safety_score || 100;
+      $('score-val').innerText = score;
+      
+      // Update ring
+      const circle = $('score-progress');
+      const radius = circle.r.baseVal.value;
+      const circumference = radius * 2 * Math.PI;
+      const offset = circumference - (score / 100) * circumference;
+      
+      circle.style.strokeDashoffset = offset;
+      
+      if (score >= 90) circle.style.stroke = '#22c55e'; // Green
+      else if (score >= 70) circle.style.stroke = '#eab308'; // Yellow
+      else circle.style.stroke = '#ef4444'; // Red
+    }
+  })
+  .catch(e => console.log('Dashboard data load failed'));
+}
+
+/* Emergency */
+function activateSOS() {
+  const btn = $('btn-sos');
+  btn.classList.add('active');
+  btn.innerText = 'LOCATING...';
+  
+  showToast('Activating SOS protocol...');
+  
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        const mapsLink = `https://maps.google.com/?q=${lat},${lng}`;
+        
+        btn.innerText = 'SOS SENT';
+        btn.style.backgroundColor = '#ef4444';
+        
+        // Show share sheet natively if possible
+        if (navigator.share) {
+          navigator.share({
+            title: 'EMERGENCY: I need help',
+            text: `I'm in an emergency. My location: ${mapsLink}`,
+            url: mapsLink
+          }).catch(console.error);
+        } else {
+          // Fallback
+          showToast(`SOS Ready! Location: ${lat.toFixed(4)}, ${lng.toFixed(4)}`, 'error');
+          setTimeout(() => {
+            btn.innerText = 'SOS';
+            btn.classList.remove('active');
+          }, 5000);
+        }
+      },
+      (err) => {
+        btn.innerText = 'GPS FAILED';
+        showToast('Could not get GPS location', 'error');
+        setTimeout(() => {
+          btn.innerText = 'SOS';
+          btn.classList.remove('active');
+        }, 3000);
+      }
+    );
+  } else {
+    showToast('GPS not supported on this device', 'error');
+  }
+}
+
+/* Utilities */
+function showToast(msg, type = 'success') {
+  const wrap = $('toasts');
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  toast.innerText = msg;
+  wrap.appendChild(toast);
+  
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateY(-20px)';
+    setTimeout(() => toast.remove(), 300);
+  }, 3000);
+}
+
+function loadTranslations() {
+  fetch('/data/translations.json')
+    .then(r => r.json())
+    .then(data => {
+      i18n = data;
+      // Setup language selector
+      $('lang-select').addEventListener('change', (e) => {
+        currentLang = e.target.value;
+        applyTranslations();
+      });
+    })
+    .catch(e => console.log('Could not load translations'));
+}
+
+function applyTranslations() {
+  if (!i18n[currentLang]) return;
+  const dict = i18n[currentLang];
+  
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.getAttribute('data-i18n');
+    if (dict[key]) {
+      if (el.tagName === 'INPUT' && el.type === 'text') {
+        el.placeholder = dict[key];
+      } else {
+        el.innerText = dict[key];
+      }
+    }
+  });
+}
+
 
