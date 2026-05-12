@@ -251,30 +251,27 @@ Server health check.
 
 ## 👥 Team & Work Division
 
-### Team of 10 Members
+### Core Team (8 Members)
 
-| # | Role | Responsibility | Files Owned |
-|---|------|---------------|-------------|
-| **1** | **Team Lead / Backend Architect** | Overall architecture, Flask app setup, API design, integration testing | `app.py`, `requirements.txt` |
-| **2** | **NLP Engineer** | Intent detection system, entity extraction, pattern matching, conversation flow | `nlp_engine.py` |
-| **3** | **Challan Calculator Developer** | Fine calculation logic, state override system, vehicle type modifiers | `challan_calculator.py` |
-| **4** | **Database Engineer** | Rules database loader, search functionality, data validation | `rules_database.py` |
-| **5** | **Legal Research — National** | Research & compile Motor Vehicles Act 2019 data, all 25+ violations, verify fine amounts | `data/india_national.json` |
-| **6** | **Legal Research — States** | Research all 28 states + 8 UT fine variations, city mappings, local rules | `data/india_states.json` |
-| **7** | **Frontend Developer — UI/UX** | Chat interface HTML structure, responsive layout, accessibility | `static/index.html`, `static/styles.css` |
-| **8** | **Frontend Developer — Logic** | Chat messaging, API integration, geolocation, offline caching, suggestion chips | `static/app.js` |
-| **9** | **QA & Testing Engineer** | Test all 25+ violation queries, edge cases, offline mode, cross-browser testing, bug fixes | Test scripts, bug reports |
-| **10** | **Documentation & Presentation** | README, code comments, 7-slide presentation (Welcome, Problem, Solution, Demo, Tech, Impact, Thank You) | `README.md`, presentation slides |
+| Member | Role | Responsibilities | Files Owned |
+| :---: | :--- | :--- | :--- |
+| **nischal202006** | **Backend Lead & DevOps** | Flask architecture, SQLite schema, JWT Auth, API endpoints. | `app.py`, `wsgi.py` |
+| **hemanthkumar2006** | **AI / NLP Engineer** | Gemini 2.0 integration, prompt engineering, AI Camera backend. | `nlp_engine.py` |
+| **vineelsaireddy** | **Frontend Lead (UI/UX)** | CSS/Design system, dark/light theme, PWA/Offline mode. | `static/styles.css`, `static/index.html` |
+| **Jittu496** | **Location Systems Engineer**| Leaflet Map, hotspots, map UI components. | `static/app.js` (map logic) |
+| **Shashank3312** | **Core Logic Engineer** | Challan calculator, state override logic, fallback NLP engine. | `challan_calculator.py` |
+| **RiyasShaik** | **Data & Localization Lead** | JSON legal datasets, state mapping, i18n (translations). | `data/*.json`, `rules_database.py` |
+| **Chervith-Reddy**| **Safety & Features Dev** | Emergency SOS UI, Dashboard, Safety score animations. | `static/index.html` (panels) |
+| **Kowshikh-10** | **Integration & QA** | Testing, E2E bug fixes, README, frontend API wireup. | `README.md`, `static/app.js` |
 
-### Work Breakdown (Sprint Plan)
+### 12-Day Development Sprint Timeline (May 1 - May 12, 2026)
 
-| Phase | Duration | Tasks |
-|-------|----------|-------|
-| **Phase 1: Research** | Day 1 | Members 5 & 6 research all traffic laws. Member 1 designs architecture. |
-| **Phase 2: Backend** | Day 1-2 | Members 2, 3, 4 build NLP engine, calculator, database. Member 1 builds Flask server. |
-| **Phase 3: Frontend** | Day 2-3 | Members 7 & 8 build chat UI and integrate with API. |
-| **Phase 4: Testing** | Day 3 | Member 9 tests all features. Everyone fixes bugs. |
-| **Phase 5: Polish** | Day 3-4 | Member 10 writes docs and presentation. Final integration. |
+| Phase | Days | Focus | Commits Made |
+|-------|------|-------|--------------|
+| **Phase 1: Foundation** | May 1 - 3 | Project structure, Flask, NLP drafts, UI scaffolding, national database | ~10 commits |
+| **Phase 2: Core Features** | May 4 - 7 | API endpoints, chat interface, fine calculations, state-level data, SOS | ~9 commits |
+| **Phase 3: Integrations** | May 8 - 10 | DB optimization, PWA implementation, offline fallback, map hotspots | ~8 commits |
+| **Phase 4: Polish & QA** | May 11 - 12 | E2E testing, WSGI/SSL setup, Gemini prompt refinement, UI responsiveness | ~8 commits |
 
 ---
 
