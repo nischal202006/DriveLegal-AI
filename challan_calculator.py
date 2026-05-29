@@ -1,4 +1,4 @@
-﻿"""
+"""
 Challan Calculator Engine â€” DriveLegal.ai
 Intelligent fine calculation with state overrides and vehicle modifiers.
 Covers all 66+ violations from the Motor Vehicles (Amendment) Act, 2019.
@@ -37,17 +37,19 @@ class ChallanCalculator:
         if not violation:
             return {'error': f'Unknown violation: {violation_key}'}
 
-        # â”€â”€ Base fine â”€â”€
-        fine = violation.get('fine', 0)
-        if isinstance(fine, dict):
-            fine = fine.get('first', fine.get('min', 0))
-
-        # â”€â”€ Repeat-offense multiplier â”€â”€
-        if is_repeat:
-            repeat_fine = violation.get('fine', {})
-            if isinstance(repeat_fine, dict) and 'repeat' in repeat_fine:
-                fine = repeat_fine['repeat']
+        # ── Base fine ──
+        fine_data = violation.get('fine', 0)
+        if isinstance(fine_data, dict):
+            if is_repeat:
+                fine = fine_data.get('repeat_offense', fine_data.get('first_offense', fine_data.get('first', 0)))
             else:
+                fine = fine_data.get('first_offense', fine_data.get('first', fine_data.get('min', 0)))
+            # Handle nested vehicle-type fines (e.g. overspeeding)
+            if isinstance(fine, dict):
+                fine = fine.get(vehicle_type, fine.get('default', 0))
+        else:
+            fine = fine_data
+            if is_repeat:
                 fine = int(fine * 2)
 
         # â”€â”€ Vehicle modifier â”€â”€
@@ -60,10 +62,12 @@ class ChallanCalculator:
         if state_key and self.db:
             override = self.db.get_state_override(state_key, violation_key)
             if override:
-                state_fine = override.get('fine', fine)
+                if is_repeat:
+                    state_fine = override.get('repeat_offense', override.get('first_offense', fine))
+                else:
+                    state_fine = override.get('first_offense', fine)
                 if isinstance(state_fine, dict):
-                    state_fine = state_fine.get('repeat' if is_repeat else 'first',
-                                                state_fine.get('min', fine))
+                    state_fine = state_fine.get(vehicle_type, state_fine.get('default', fine))
                 state_fine = int(state_fine * modifier)
                 state_label = self.db.get_state_name(state_key) or state_key
 

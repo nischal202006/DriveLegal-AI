@@ -1,4 +1,4 @@
-﻿/* DriveLegal.ai â€” Design System v1.2 */
+/* DriveLegal.ai â€” Design System v1.2 */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
 
 :root {
@@ -923,6 +923,102 @@ input, select, textarea { font-family: inherit; outline: none; }
   .message { max-width: 95%; }
   .calc-panel, .dash-panel { padding: 20px 16px; }
   .form-row { flex-direction: column; gap: 0; }
+  
+  .main-header { padding: 0 16px; }
+  .chat-messages { padding: 16px; gap: 14px; }
+  .chat-input-area { padding: 12px 16px; gap: 8px; }
+  
+  #chat-input { padding: 12px 44px 12px 16px; font-size: 0.95rem; }
+  
+  .icon-btn { width: 42px; height: 42px; }
+  .send-btn { width: 42px; height: 42px; }
+  .icon-btn svg, .send-btn svg { width: 18px; height: 18px; }
+  
+  .suggestion-chips { gap: 6px; }
+  .suggestion-chips button { padding: 6px 12px; font-size: 0.8rem; }
+  
+  .calc-container { padding: 0; }
+  .dash-container { padding: 20px 0; }
+  
+  .score-card { flex-direction: column; text-align: center; }
+  .stats-grid { grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .stat-box { padding: 14px 8px; }
+  .stat-num { font-size: 1.25rem; }
+  
+  .sos-ripple { width: 160px; height: 160px; }
+  .sos-btn { width: 110px; height: 110px; font-size: 1.5rem; }
+  @keyframes ripple {
+    0% { width: 110px; height: 110px; opacity: 1; }
+    100% { width: 240px; height: 240px; opacity: 0; }
+  }
+  
+  .contact-card { padding: 12px; }
+  .c-icon { width: 40px; height: 40px; margin-right: 12px; }
+  
+  .modal-content { width: 95%; }
 }
 
+/* Small phones */
+@media (max-width: 380px) {
+  .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  .sidebar-text h1 { font-size: 0.95rem; }
+  .header-title { font-size: 1.1rem; }
+  .suggestion-chips button { font-size: 0.75rem; padding: 5px 10px; }
+}
 
+/* Tablet landscape */
+@media (min-width: 769px) and (max-width: 1024px) {
+  :root { --sidebar-w: 220px; }
+  .calc-container { max-width: 100%; }
+}
+
+/* Safe area for notched phones (iOS) */
+@supports (padding: env(safe-area-inset-bottom)) {
+  .chat-input-area {
+    padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  }
+  .sidebar-footer {
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+  }
+}
+
+/* Offline Calculator Badge */
+.offline-calc-badge {
+  display: inline-block;
+  background: rgba(245, 158, 11, 0.15);
+  color: var(--warning);
+  padding: 6px 14px;
+  border-radius: var(--radius-xl);
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-bottom: 12px;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+/* Geo-detection info */
+.geo-detect-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: var(--radius-md);
+  margin-bottom: 16px;
+  font-size: 0.85rem;
+  color: var(--info);
+  font-weight: 500;
+}
+
+.geo-icon { font-size: 1.1rem; }
+
+/* Text size utility */
+.text-sm { font-size: 0.85rem; }
+
+/* Print styles */
+@media print {
+  .sidebar, .main-header, .chat-input-area, .toast-wrap { display: none !important; }
+  .main-content { margin: 0; }
+  .panel { position: static; opacity: 1; pointer-events: all; }
+  .calc-results { border: 2px solid #000; }
+}

@@ -8,6 +8,7 @@ class RulesDatabase:
         self.base_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')
         self.national_rules = self._load_json('india_national.json')
         self.state_rules = self._load_json('india_states.json')
+        self.global_rules = self._load_json('global_rules.json')
         self.offline_cache = {}
         self._build_cache()
     
@@ -101,3 +102,41 @@ class RulesDatabase:
     def is_data_loaded(self):
         """Check if database is loaded (for offline mode detection)."""
         return bool(self.offline_cache.get('loaded'))
+    
+    def get_all_state_keys(self):
+        """Get list of all state and UT keys."""
+        states = list(self.state_rules.get('states', {}).keys())
+        uts = list(self.state_rules.get('union_territories', {}).keys())
+        return states + uts
+    
+    def get_state_name(self, state_key):
+        """Get the display name for a state key."""
+        states = self.state_rules.get('states', {})
+        uts = self.state_rules.get('union_territories', {})
+        state_data = states.get(state_key) or uts.get(state_key)
+        if state_data:
+            return state_data.get('name', state_key)
+        return None
+    
+    # --- Global / Multi-Country ---
+    def get_all_countries(self):
+        """Get dict of country_key -> country_name."""
+        countries = self.global_rules.get('countries', {})
+        return {k: v.get('name', k) for k, v in countries.items()}
+    
+    def get_country_data(self, country_key):
+        """Get full data for a country."""
+        return self.global_rules.get('countries', {}).get(country_key)
+    
+    def get_country_violations(self, country_key):
+        """Get violations for a specific country."""
+        country = self.get_country_data(country_key)
+        if country:
+            return country.get('violations', {})
+        return {}
+    
+    def get_country_violation(self, country_key, violation_key):
+        """Get a specific violation from a specific country."""
+        violations = self.get_country_violations(country_key)
+        return violations.get(violation_key)
+

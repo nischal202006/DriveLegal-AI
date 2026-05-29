@@ -1,4 +1,4 @@
-﻿"""
+"""
 NLP Engine â€” DriveLegal.ai
 Gemini-first conversational AI with rule-based offline fallback.
 Domain-restricted to road safety, traffic law, and driving assistance.
@@ -8,23 +8,26 @@ import re, os, json, time
 from collections import defaultdict
 import datetime
 
-SYSTEM_PROMPT = """You are DriveLegal.ai, a professional road safety and Indian traffic law assistant.
+SYSTEM_PROMPT = """You are DriveLegal.ai, a professional road safety and traffic law assistant with global coverage.
 
 YOUR DOMAIN (answer ONLY these topics):
+- Traffic laws, violations, fines, challans, and penalties across countries
 - Indian traffic laws and the Motor Vehicles (Amendment) Act, 2019
-- Traffic violations, fines, challans, and penalties
-- State-specific traffic rules and overrides
-- Road safety education and best practices
+- State-specific traffic rules and overrides (India)
+- International traffic laws for USA, UK, UAE, Germany, Australia, Canada, and others
+- Road safety education and best practices worldwide
 - Emergency helpline numbers and accident procedures
 - Vehicle documentation and driving license rules
+- Comparative analysis of traffic laws across countries
 
 STRICT RULES:
 1. NEVER answer questions outside road safety, traffic law, or driving assistance. If a user asks about politics, programming, jokes, or general knowledge, politely decline and steer them back to traffic laws.
-2. Always cite the specific Section of the Motor Vehicles Act when discussing violations.
-3. Use INR (Rs.) for all fine amounts. Never use emojis.
+2. When discussing Indian violations, cite the specific Section of the Motor Vehicles Act.
+3. Use the appropriate currency for each country (INR for India, USD for USA, GBP for UK, AED for UAE, EUR for Germany, AUD for Australia, CAD for Canada).
 4. Be conversational, professional, and concise. Do not write essays. Use bullet points for multiple items.
 5. If you do not know the exact fine, state clearly that it varies and advise checking with local authorities.
-6. When calculating fines for a state, remember that some states have different structures than the national act.
+6. When calculating fines for a state (India), remember that some states have different structures than the national act.
+7. When asked about a specific country, provide country-specific information including emergency numbers and local rules.
 
 Context: You will be provided with some JSON data containing relevant rules or fine amounts to help answer the user's query. Use it accurately.
 """
@@ -89,27 +92,63 @@ class NLPEngine:
         context_items = []
         msg_lower = message.lower()
         
-        # Check against all violations in the DB
+        # Check against all Indian violations in the DB
         all_violations = self.db.get_all_violations()
         for key, v in all_violations.items():
-            # Check if name or keywords match
             keywords = v.get('keywords', [])
             keywords.append(v.get('name', '').lower())
             
             for keyword in keywords:
                 if keyword in msg_lower:
                     context_items.append(
-                        f"Violation: {v.get('name')}\n"
+                        f"[INDIA] Violation: {v.get('name')}\n"
                         f"Section: {v.get('section')}\n"
                         f"Fine: Rs. {v.get('fine', 'Varies')}\n"
-                        f"Penalty: {v.get('penalty', 'None')}"
+                        f"Safety Advice: {v.get('safety_advice', 'N/A')}"
                     )
                     break
+        
+        # Check against global/international rules
+        country_keywords = {
+            'usa': ['usa', 'united states', 'america', 'american'],
+            'uk': ['uk', 'united kingdom', 'britain', 'british', 'england'],
+            'uae': ['uae', 'dubai', 'abu dhabi', 'emirates'],
+            'germany': ['germany', 'german', 'deutschland', 'autobahn'],
+            'australia': ['australia', 'australian', 'sydney', 'melbourne'],
+            'canada': ['canada', 'canadian', 'toronto', 'ontario'],
+        }
+        
+        for country_key, keywords in country_keywords.items():
+            if any(kw in msg_lower for kw in keywords):
+                country_data = self.db.get_country_data(country_key)
+                if country_data:
+                    country_name = country_data.get('name', country_key)
+                    currency = country_data.get('currency_symbol', '$')
+                    context_items.append(
+                        f"[{country_name.upper()}] Country Info:\n"
+                        f"Currency: {currency}\n"
+                        f"Drive Side: {country_data.get('drive_side', 'right')}\n"
+                        f"BAC Limit: {country_data.get('bac_limit', 'Varies')}\n"
+                        f"Emergency: {country_data.get('emergency_number', 'N/A')}\n"
+                        f"Speed Unit: {country_data.get('speed_unit', 'km/h')}"
+                    )
+                    # Add matching violations for the country
+                    for vk, viol in country_data.get('violations', {}).items():
+                        viol_name = viol.get('name', '').lower()
+                        if any(word in msg_lower for word in viol_name.split() if len(word) > 3):
+                            fine = viol.get('fine', {})
+                            context_items.append(
+                                f"[{country_name.upper()}] {viol.get('name')}:\n"
+                                f"First Offense: {currency}{fine.get('first_offense', 'N/A')}\n"
+                                f"Repeat: {currency}{fine.get('repeat_offense', 'N/A')}\n"
+                                f"Penalties: {', '.join(viol.get('additional_penalties', []))}"
+                            )
+                break
         
         if not context_items:
             return ""
             
-        return "DATABASE CONTEXT (Use this to answer accurately):\n" + "\n---\n".join(context_items[:3])
+        return "DATABASE CONTEXT (Use this to answer accurately):\n" + "\n---\n".join(context_items[:5])
 
     def process(self, message, location=None, session_id='default'):
         """
@@ -122,7 +161,7 @@ class NLPEngine:
         out_of_domain = re.search(r'\b(write a poem|code|python|java|html|joke|recipe|movie|politics)\b', message, re.IGNORECASE)
         if out_of_domain:
             return {
-                'text': "I am DriveLegal.ai, a specialized assistant for Indian traffic laws and road safety. I cannot assist with topics outside of my domain.",
+                'text': "I am DriveLegal.ai, a specialized assistant for traffic laws and road safety worldwide. I cover India, USA, UK, UAE, Germany, Australia, Canada, and more. I cannot assist with topics outside my domain.",
                 'data': {'type': 'rejection'},
                 'confidence': 'High',
                 'latency_ms': int((time.time() - start_time) * 1000)

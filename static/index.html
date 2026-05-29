@@ -1,9 +1,9 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta name="description" content="DriveLegal.ai - AI-powered road safety assistant for Indian traffic laws.">
+  <meta name="description" content="DriveLegal.ai - AI-powered road safety assistant for traffic laws worldwide. Covers India, USA, UK, UAE, Germany, Australia, Canada and more. Challan calculator, geo-fenced fines, offline support.">
   <meta name="theme-color" content="#0A0E1A">
   <title>DriveLegal.ai</title>
   
@@ -120,13 +120,15 @@
           <div class="chat-messages" id="chat-msgs">
             <div class="message ai">
               <div class="msg-bubble">
-                Hello! I'm DriveLegal.ai, your intelligent road safety assistant. I can help you understand Indian traffic laws, check fine amounts, or guide you in an emergency. How can I assist you today?
+              Hello! I'm DriveLegal.ai, your intelligent road safety assistant with <strong>global coverage</strong>. I can help you understand traffic laws in India, USA, UK, UAE, Germany, Australia, Canada and more — check fine amounts, compare penalties across states & countries, or guide you in an emergency. Ask me anything!
               </div>
             </div>
             <div class="suggestion-chips" id="chat-suggestions">
               <button onclick="sendChat('What is the fine for driving without a helmet?')">Helmet Fine</button>
               <button onclick="sendChat('What is Section 185 of MV Act?')">Drunk Driving Laws</button>
               <button onclick="sendChat('Speed limits on highways')">Speed Limits</button>
+              <button onclick="sendChat('DUI fine in USA vs India')">Compare: USA vs India</button>
+              <button onclick="sendChat('Traffic rules in UAE Dubai')">UAE Traffic Laws</button>
             </div>
           </div>
           
@@ -177,10 +179,22 @@
         <!-- Calculator Panel -->
         <div class="panel calc-panel" id="p-calculator">
           <div class="calc-container">
-            <h2>Challan Calculator</h2>
-            <p class="calc-subtitle">Select violations to calculate fines based on vehicle and state.</p>
+            <h2>Challan / Fine Calculator</h2>
+            <p class="calc-subtitle">Calculate traffic fines globally. Auto-detects your state via GPS. Select country, violations, and vehicle type.</p>
+            <div class="geo-detect-info" id="geo-detect-info" style="display:none;">
+              <span class="geo-icon">📍</span>
+              <span id="geo-detect-text">Detecting your location...</span>
+            </div>
             
             <div class="form-group">
+              <label>Country</label>
+              <select id="calc-country">
+                <option value="india" selected>India</option>
+                <!-- Filled dynamically -->
+              </select>
+            </div>
+
+            <div class="form-group" id="state-group">
               <label data-i18n="state">State / Union Territory</label>
               <select id="calc-state">
                 <option value="national" data-i18n="national_default">National (Default)</option>

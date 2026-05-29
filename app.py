@@ -1,4 +1,4 @@
-﻿"""
+"""
 DriveLegal.ai - Flask Application
 Main server for the Indian traffic law assistant.
 IIT Madras Road Safety Hackathon 2026
@@ -88,9 +88,8 @@ def init_db():
         ''')
         db.commit()
 
-# Initialize DB on startup
-if not os.path.exists(DATABASE):
-    init_db()
+# Initialize DB on startup (safe to call repeatedly due to IF NOT EXISTS)
+init_db()
 
 
 # --- Authentication Middleware ---
@@ -125,6 +124,11 @@ def index():
 @app.route('/sw.js')
 def service_worker():
     return send_from_directory('static', 'sw.js')
+
+@app.route('/data/<path:filename>')
+def serve_data(filename):
+    """Serve JSON data files for offline caching and translations."""
+    return send_from_directory('data', filename)
 
 
 # --- Auth Endpoints ---
@@ -258,11 +262,101 @@ def compare_states():
 
 @app.route('/api/violations', methods=['GET'])
 def get_violations():
-    return jsonify(db.get_violation_names())
+    country = request.args.get('country', 'india')
+    if country == 'india':
+        return jsonify(db.get_violation_names())
+    else:
+        violations = db.get_country_violations(country)
+        return jsonify({k: v.get('name', k) for k, v in violations.items()})
 
 @app.route('/api/states', methods=['GET'])
 def get_states():
     return jsonify({k: db.get_state_name(k) for k in db.get_all_state_keys()})
+
+@app.route('/api/countries', methods=['GET'])
+def get_countries():
+    return jsonify(db.get_all_countries())
+
+@app.route('/api/country/<country_key>', methods=['GET'])
+def get_country_info(country_key):
+    data = db.get_country_data(country_key)
+    if not data:
+        return jsonify({'error': 'Country not found'}), 404
+    return jsonify(data)
+
+
+# --- Geo-fencing Endpoints ---
+@app.route('/api/geo/state', methods=['GET'])
+def geo_state():
+    """Map a city name to its state key for geo-fenced fine lookup."""
+    city = request.args.get('city', '').strip()
+    if not city:
+        return jsonify({'error': 'City parameter is required'}), 400
+    
+    state_key = db.get_state_from_city(city)
+    if state_key:
+        state_name = db.get_state_name(state_key)
+        return jsonify({
+            'city': city,
+            'state_key': state_key,
+            'state_name': state_name
+        })
+    return jsonify({'city': city, 'state_key': None, 'state_name': None, 'message': 'City not found in mapping'})
+
+@app.route('/api/geo/detect', methods=['GET'])
+def geo_detect():
+    """Return the city-to-state mapping for client-side geo-fencing."""
+    city_map = db.state_rules.get('city_to_state_mapping', {})
+    return jsonify(city_map)
+
+@app.route('/api/calculate/global', methods=['POST'])
+def calculate_global_fine():
+    data = request.json
+    if not data or not data.get('violations') or not data.get('country'):
+        return jsonify({'error': 'Violations array and country are required'}), 400
+    
+    country_key = data['country']
+    violations_list = data['violations']
+    country_data = db.get_country_data(country_key)
+    
+    if not country_data:
+        return jsonify({'error': 'Country not found'}), 404
+    
+    results = []
+    grand_total = 0
+    is_repeat = data.get('is_repeat', False)
+    currency = country_data.get('currency_symbol', '$')
+    
+    for vk in violations_list:
+        violation = country_data.get('violations', {}).get(vk)
+        if not violation:
+            results.append({'error': f'Unknown violation: {vk}'})
+            continue
+        
+        fine_data = violation.get('fine', {})
+        if is_repeat:
+            fine = fine_data.get('repeat_offense', fine_data.get('first_offense', 0))
+        else:
+            fine = fine_data.get('first_offense', 0)
+        
+        grand_total += fine
+        results.append({
+            'violation_key': vk,
+            'violation_name': violation.get('name', vk),
+            'total_fine': fine,
+            'is_repeat': is_repeat,
+            'additional_penalties': violation.get('additional_penalties', []),
+            'safety_advice': violation.get('safety_advice', ''),
+        })
+    
+    return jsonify({
+        'violations': results,
+        'count': len(results),
+        'grand_total': grand_total,
+        'country': country_data.get('name', country_key),
+        'currency': currency,
+        'is_repeat': is_repeat,
+    })
 
 @app.route('/api/hazards', methods=['GET', 'POST'])
 def hazards():
@@ -328,16 +422,18 @@ def get_dashboard(user_id):
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     use_ssl = int(os.environ.get('USE_SSL', 0))
+    debug = os.environ.get('FLASK_DEBUG', 'true').lower() in ('true', '1', 'yes')
     
     print(f"\n[*] DriveLegal.ai Server starting on port {port}")
     print(f"[*] Environment: {os.environ.get('FLASK_ENV', 'development')}")
     print(f"[*] AI Engine: {'ONLINE' if nlp.gemini_model else 'OFFLINE FALLBACK'}")
+    print(f"[*] Debug: {debug}")
     
     if use_ssl and os.path.exists('ssl/drivelegal.crt') and os.path.exists('ssl/drivelegal.key'):
         print(f"[*] Mode: HTTPS (SSL Enabled)")
-        app.run(host='0.0.0.0', port=port, ssl_context=('ssl/drivelegal.crt', 'ssl/drivelegal.key'))
+        app.run(host='0.0.0.0', port=port, debug=debug, ssl_context=('ssl/drivelegal.crt', 'ssl/drivelegal.key'))
     else:
         print(f"[*] Mode: HTTP")
-        app.run(host='0.0.0.0', port=port)
+        app.run(host='0.0.0.0', port=port, debug=debug)
 
 

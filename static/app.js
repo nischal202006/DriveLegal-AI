@@ -1,4 +1,4 @@
-﻿/* DriveLegal.ai â€” Client v1.2 */
+/* DriveLegal.ai â€” Client v1.2 */
 
 const API = '';
 let MAP = null;
@@ -97,6 +97,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Load data
   loadTranslations();
+  preloadOfflineData();
   checkAuth();
   
   // PWA setup
@@ -231,47 +232,163 @@ function sendChat(message) {
 /* Calculator */
 let CACHED_VIOLATIONS = null;
 let CACHED_STATES = null;
+let CACHED_COUNTRIES = null;
+let CURRENT_COUNTRY = 'india';
+let OFFLINE_NATIONAL_DATA = null;
+let OFFLINE_STATES_DATA = null;
+let OFFLINE_GLOBAL_DATA = null;
+let CITY_STATE_MAP = null;
+let GEO_DETECTED_STATE = null;
+
+/* Pre-load JSON data for offline calculator */
+function preloadOfflineData() {
+  fetch('/data/india_national.json').then(r => r.json()).then(d => { OFFLINE_NATIONAL_DATA = d; }).catch(() => {});
+  fetch('/data/india_states.json').then(r => r.json()).then(d => { OFFLINE_STATES_DATA = d; CITY_STATE_MAP = d.city_to_state_mapping || {}; }).catch(() => {});
+  fetch('/data/global_rules.json').then(r => r.json()).then(d => { OFFLINE_GLOBAL_DATA = d; }).catch(() => {});
+}
 
 function loadCalcData() {
+  // Load Countries
+  if (!CACHED_COUNTRIES) {
+    fetch(API + '/api/countries')
+      .then(r => r.json())
+      .then(data => {
+        CACHED_COUNTRIES = data;
+        const select = $('calc-country');
+        // Avoid duplicating options on re-entry
+        if (select.options.length <= 1) {
+          Object.keys(data).forEach(key => {
+            const opt = document.createElement('option');
+            opt.value = key;
+            opt.innerText = data[key];
+            select.appendChild(opt);
+          });
+        }
+      }).catch(e => {
+        // Offline: load from cached global data
+        if (OFFLINE_GLOBAL_DATA && OFFLINE_GLOBAL_DATA.countries) {
+          CACHED_COUNTRIES = {};
+          const select = $('calc-country');
+          if (select.options.length <= 1) {
+            Object.keys(OFFLINE_GLOBAL_DATA.countries).forEach(key => {
+              CACHED_COUNTRIES[key] = OFFLINE_GLOBAL_DATA.countries[key].name;
+              const opt = document.createElement('option');
+              opt.value = key;
+              opt.innerText = OFFLINE_GLOBAL_DATA.countries[key].name;
+              select.appendChild(opt);
+            });
+          }
+        }
+      });
+  }
+  
+  // Load States (India only)
+  if (!CACHED_STATES) {
+    fetch(API + '/api/states')
+      .then(r => r.json())
+      .then(data => {
+        CACHED_STATES = data;
+        populateStateSelector(data);
+      }).catch(e => {
+        // Offline: build from cached states data
+        if (OFFLINE_STATES_DATA) {
+          CACHED_STATES = {};
+          const states = OFFLINE_STATES_DATA.states || {};
+          const uts = OFFLINE_STATES_DATA.union_territories || {};
+          Object.keys(states).forEach(k => { CACHED_STATES[k] = states[k].name; });
+          Object.keys(uts).forEach(k => { CACHED_STATES[k] = uts[k].name; });
+          populateStateSelector(CACHED_STATES);
+        }
+      });
+  }
+    
+  // Load Violations for current country
+  loadViolationsForCountry(CURRENT_COUNTRY);
+  
+  // Country change handler (only bind once)
+  const countrySelect = $('calc-country');
+  if (!countrySelect._bound) {
+    countrySelect._bound = true;
+    countrySelect.addEventListener('change', (e) => {
+      CURRENT_COUNTRY = e.target.value;
+      const stateGroup = $('state-group');
+      if (CURRENT_COUNTRY === 'india') {
+        stateGroup.style.display = 'block';
+      } else {
+        stateGroup.style.display = 'none';
+      }
+      CACHED_VIOLATIONS = null;
+      loadViolationsForCountry(CURRENT_COUNTRY);
+    });
+  }
+
+  // Auto-detect state from geolocation (geo-fencing)
+  autoDetectState();
+}
+
+function populateStateSelector(data) {
+  const select = $('calc-state');
+  if (select.options.length <= 1) {
+    Object.keys(data).forEach(key => {
+      const opt = document.createElement('option');
+      opt.value = key;
+      opt.innerText = data[key];
+      select.appendChild(opt);
+    });
+  }
+  // If geo-detected state is set, auto-select it
+  if (GEO_DETECTED_STATE && data[GEO_DETECTED_STATE]) {
+    select.value = GEO_DETECTED_STATE;
+    showToast(`Auto-detected: ${data[GEO_DETECTED_STATE]}`, 'success');
+  }
+}
+
+function loadViolationsForCountry(country) {
   if (CACHED_VIOLATIONS) return;
   
-  // Load States
-  fetch(API + '/api/states')
-    .then(r => r.json())
-    .then(data => {
-      CACHED_STATES = data;
-      const select = $('calc-state');
-      Object.keys(data).forEach(key => {
-        const opt = document.createElement('option');
-        opt.value = key;
-        opt.innerText = data[key];
-        select.appendChild(opt);
-      });
-    }).catch(e => console.log('Offline: cannot load states'));
-    
-  // Load Violations
-  fetch(API + '/api/violations')
+  const url = country === 'india' ? API + '/api/violations' : API + '/api/violations?country=' + country;
+  
+  fetch(url)
     .then(r => r.json())
     .then(data => {
       CACHED_VIOLATIONS = data;
-      const list = $('violation-list');
-      Object.keys(data).forEach(key => {
-        const item = document.createElement('div');
-        item.className = 'violation-item';
-        item.innerHTML = `
-          <label>
-            <input type="checkbox" value="${key}" class="viol-cb">
-            <span>${data[key]}</span>
-          </label>
-        `;
-        list.appendChild(item);
-      });
-      
-      // Add event listeners to checkboxes
-      document.querySelectorAll('.viol-cb').forEach(cb => {
-        cb.addEventListener('change', updateSelectedViolations);
-      });
-    }).catch(e => console.log('Offline: cannot load violations'));
+      renderViolationList(data);
+    }).catch(e => {
+      // Offline fallback: build from cached JSON
+      if (country === 'india' && OFFLINE_NATIONAL_DATA) {
+        const v = OFFLINE_NATIONAL_DATA.violations || {};
+        CACHED_VIOLATIONS = {};
+        Object.keys(v).forEach(k => { CACHED_VIOLATIONS[k] = v[k].name; });
+        renderViolationList(CACHED_VIOLATIONS);
+      } else if (OFFLINE_GLOBAL_DATA && OFFLINE_GLOBAL_DATA.countries && OFFLINE_GLOBAL_DATA.countries[country]) {
+        const v = OFFLINE_GLOBAL_DATA.countries[country].violations || {};
+        CACHED_VIOLATIONS = {};
+        Object.keys(v).forEach(k => { CACHED_VIOLATIONS[k] = v[k].name; });
+        renderViolationList(CACHED_VIOLATIONS);
+      }
+    });
+}
+
+function renderViolationList(data) {
+  const list = $('violation-list');
+  list.innerHTML = '';
+  $('selected-violations').innerHTML = '<span class="placeholder-text">Select at least one violation...</span>';
+  
+  Object.keys(data).forEach(key => {
+    const item = document.createElement('div');
+    item.className = 'violation-item';
+    item.innerHTML = `
+      <label>
+        <input type="checkbox" value="${key}" class="viol-cb">
+        <span>${data[key]}</span>
+      </label>
+    `;
+    list.appendChild(item);
+  });
+  
+  document.querySelectorAll('.viol-cb').forEach(cb => {
+    cb.addEventListener('change', updateSelectedViolations);
+  });
 }
 
 function updateSelectedViolations() {
@@ -296,18 +413,32 @@ function calculateFine() {
     return;
   }
   
+  const country = $('calc-country').value;
   const state = $('calc-state').value;
   const vehicle = $('calc-vehicle').value;
   const isRepeat = document.querySelector('input[name="offense_type"]:checked').value === 'repeat';
   
-  const payload = {
-    violations: violations,
-    vehicle_type: vehicle,
-    is_repeat: isRepeat
-  };
-  if (state !== 'national') payload.state = state;
+  // Use different endpoints for India vs global
+  let endpoint, payload;
   
-  fetch(API + '/api/calculate', {
+  if (country === 'india') {
+    endpoint = API + '/api/calculate';
+    payload = {
+      violations: violations,
+      vehicle_type: vehicle,
+      is_repeat: isRepeat
+    };
+    if (state !== 'national') payload.state = state;
+  } else {
+    endpoint = API + '/api/calculate/global';
+    payload = {
+      country: country,
+      violations: violations,
+      is_repeat: isRepeat
+    };
+  }
+  
+  fetch(endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
@@ -315,30 +446,218 @@ function calculateFine() {
   .then(r => r.json())
   .then(data => {
     if (data.error) throw new Error(data.error);
-    
-    const results = $('calc-results');
-    const breakdown = $('result-breakdown');
-    
-    breakdown.innerHTML = data.violations.map(v => `
+    displayCalcResults(data);
+  })
+  .catch(err => {
+    // OFFLINE FALLBACK: Calculate locally from cached JSON data
+    console.log('API failed, trying offline calculation:', err.message);
+    const offlineResult = calculateFineOffline(violations, country, state, vehicle, isRepeat);
+    if (offlineResult) {
+      displayCalcResults(offlineResult, true);
+    } else {
+      showToast('Unable to calculate. Please check your connection.', 'error');
+    }
+  });
+}
+
+function displayCalcResults(data, isOffline = false) {
+  const results = $('calc-results');
+  const breakdown = $('result-breakdown');
+  const currency = data.currency || 'Rs.';
+  
+  const offlineBadge = isOffline ? '<span class="offline-calc-badge">⚡ Offline Estimate</span>' : '';
+  
+  breakdown.innerHTML = data.violations.map(v => {
+    if (v.error) return `<div class="fine-row"><div><strong>${v.error}</strong></div></div>`;
+    const section = v.section ? `<div class="text-sm text-muted">Sec ${v.section}</div>` : '';
+    const penalties = v.additional_penalties && v.additional_penalties.length > 0
+      ? `<div class="text-sm text-muted" style="margin-top:4px;">${v.additional_penalties.join(', ')}</div>` : '';
+    return `
       <div class="fine-row">
         <div>
           <strong>${v.violation_name}</strong>
-          <div class="text-sm text-muted">Sec ${v.section}</div>
+          ${section}
+          ${penalties}
         </div>
         <div class="text-right">
-          <strong>Rs. ${v.total_fine}</strong>
+          <strong>${currency} ${v.total_fine.toLocaleString()}</strong>
         </div>
       </div>
-    `).join('');
-    
-    $('result-total-amt').innerText = `Rs. ${data.grand_total}`;
-    results.style.display = 'block';
-    results.scrollIntoView({ behavior: 'smooth' });
-  })
-  .catch(err => {
-    showToast('Failed to calculate fine. Check connection.', 'error');
-  });
+    `;
+  }).join('');
+  
+  $('result-total-amt').innerText = `${currency} ${data.grand_total.toLocaleString()}`;
+  
+  // Show offline badge if applicable
+  const existingBadge = results.querySelector('.offline-calc-badge');
+  if (existingBadge) existingBadge.remove();
+  if (isOffline) {
+    const badge = document.createElement('div');
+    badge.className = 'offline-calc-badge';
+    badge.innerHTML = '⚡ Offline Estimate — fines may vary by local enforcement';
+    results.querySelector('h3').after(badge);
+  }
+  
+  results.style.display = 'block';
+  results.scrollIntoView({ behavior: 'smooth' });
 }
+
+/* Offline Calculator — mirrors challan_calculator.py logic */
+const VEHICLE_MODIFIERS = {
+  two_wheeler: 0.75, auto_rickshaw: 0.85, car: 1.0,
+  taxi: 1.1, bus: 1.5, truck: 1.5, commercial: 1.3, e_rickshaw: 0.8
+};
+
+function calculateFineOffline(violationKeys, country, stateKey, vehicleType, isRepeat) {
+  let sourceData = null;
+  let currency = 'Rs.';
+  let isIndia = country === 'india';
+  
+  if (isIndia) {
+    if (!OFFLINE_NATIONAL_DATA) return null;
+    sourceData = OFFLINE_NATIONAL_DATA.violations || {};
+  } else {
+    if (!OFFLINE_GLOBAL_DATA || !OFFLINE_GLOBAL_DATA.countries || !OFFLINE_GLOBAL_DATA.countries[country]) return null;
+    const countryData = OFFLINE_GLOBAL_DATA.countries[country];
+    sourceData = countryData.violations || {};
+    currency = countryData.currency_symbol || '$';
+  }
+  
+  const results = [];
+  let grandTotal = 0;
+  const modifier = VEHICLE_MODIFIERS[vehicleType] || 1.0;
+  
+  for (const vk of violationKeys) {
+    const violation = sourceData[vk];
+    if (!violation) {
+      results.push({ error: `Unknown violation: ${vk}` });
+      continue;
+    }
+    
+    let fineData = violation.fine || 0;
+    let fine = 0;
+    
+    if (typeof fineData === 'object') {
+      if (isRepeat) {
+        fine = fineData.repeat_offense || fineData.first_offense || 0;
+      } else {
+        fine = fineData.first_offense || 0;
+      }
+      // Handle nested vehicle-type fines (e.g. overspeeding)
+      if (typeof fine === 'object') {
+        fine = fine[vehicleType] || fine.default || 0;
+      }
+    } else {
+      fine = fineData;
+      if (isRepeat) fine = fine * 2;
+    }
+    
+    // Apply vehicle modifier (India only)
+    if (isIndia) {
+      fine = Math.round(fine * modifier);
+    }
+    
+    // Check state override (India only)
+    let stateFine = null;
+    let stateLabel = 'National (MV Act 2019)';
+    if (isIndia && stateKey && stateKey !== 'national' && OFFLINE_STATES_DATA) {
+      const states = OFFLINE_STATES_DATA.states || {};
+      const uts = OFFLINE_STATES_DATA.union_territories || {};
+      const stateData = states[stateKey] || uts[stateKey];
+      if (stateData) {
+        stateLabel = stateData.name || stateKey;
+        const override = (stateData.overrides || {})[vk];
+        if (override) {
+          if (isRepeat) {
+            stateFine = override.repeat_offense || override.first_offense || fine;
+          } else {
+            stateFine = override.first_offense || fine;
+          }
+          if (typeof stateFine === 'object') {
+            stateFine = stateFine[vehicleType] || stateFine.default || fine;
+          }
+          stateFine = Math.round(stateFine * modifier);
+        }
+      }
+    }
+    
+    const totalFine = stateFine !== null ? stateFine : fine;
+    grandTotal += totalFine;
+    
+    results.push({
+      violation_key: vk,
+      violation_name: violation.name || vk,
+      section: violation.section || '',
+      total_fine: totalFine,
+      is_repeat: isRepeat,
+      additional_penalties: violation.additional_penalties || [],
+      safety_advice: violation.safety_advice || ''
+    });
+  }
+  
+  return {
+    violations: results,
+    count: results.length,
+    grand_total: grandTotal,
+    currency: currency,
+    vehicle_type: vehicleType,
+    state: stateKey || 'national',
+    is_repeat: isRepeat
+  };
+}
+
+/* Geo-fencing: Auto-detect user state from location */
+function autoDetectState() {
+  if (GEO_DETECTED_STATE) return; // Already detected
+  if (!navigator.geolocation) return;
+  
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+      
+      // Use Nominatim reverse geocoding (free, no API key)
+      fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&addressdetails=1`)
+        .then(r => r.json())
+        .then(data => {
+          const addr = data.address || {};
+          const city = (addr.city || addr.town || addr.village || addr.county || '').toLowerCase();
+          const stateFromGeo = (addr.state || '').toLowerCase();
+          
+          // Try city mapping first
+          if (CITY_STATE_MAP && city && CITY_STATE_MAP[city]) {
+            GEO_DETECTED_STATE = CITY_STATE_MAP[city];
+          } else {
+            // Try matching state name directly
+            fetch(API + '/api/geo/state?city=' + encodeURIComponent(city))
+              .then(r => r.json())
+              .then(d => {
+                if (d.state_key) {
+                  GEO_DETECTED_STATE = d.state_key;
+                  const sel = $('calc-state');
+                  if (sel && CACHED_STATES && CACHED_STATES[d.state_key]) {
+                    sel.value = d.state_key;
+                    showToast(`📍 Detected: ${CACHED_STATES[d.state_key]}`, 'success');
+                  }
+                }
+              }).catch(() => {});
+            return;
+          }
+          
+          // Auto-select detected state
+          if (GEO_DETECTED_STATE) {
+            const sel = $('calc-state');
+            if (sel && CACHED_STATES && CACHED_STATES[GEO_DETECTED_STATE]) {
+              sel.value = GEO_DETECTED_STATE;
+              showToast(`📍 Detected: ${CACHED_STATES[GEO_DETECTED_STATE]}`, 'success');
+            }
+          }
+        }).catch(() => {}); // Silently fail if geocoding unavailable
+    },
+    () => {} // Silently fail if geolocation denied
+  );
+}
+
 
 /* Dashboard & Auth */
 function checkAuth() {
@@ -521,6 +840,56 @@ function applyTranslations() {
         el.innerText = dict[key];
       }
     }
+  });
+}
+
+/* Network Status Detection */
+window.addEventListener('online', () => {
+  $('offline-badge').style.display = 'none';
+  showToast('Back online!', 'success');
+});
+
+window.addEventListener('offline', () => {
+  $('offline-badge').style.display = 'flex';
+  showToast('You are offline. Some features may be limited.', 'warning');
+});
+
+// Check initial state
+if (!navigator.onLine) {
+  document.addEventListener('DOMContentLoaded', () => {
+    $('offline-badge').style.display = 'flex';
+  });
+}
+
+/* Voice Input (Web Speech API) */
+if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+  document.addEventListener('DOMContentLoaded', () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = 'en-IN';
+    
+    $('btn-voice').addEventListener('click', () => {
+      $('btn-voice').classList.add('active');
+      recognition.start();
+      showToast('Listening... Speak now');
+    });
+    
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript;
+      $('chat-input').value = transcript;
+      $('btn-voice').classList.remove('active');
+    };
+    
+    recognition.onerror = () => {
+      $('btn-voice').classList.remove('active');
+      showToast('Voice input failed. Try again.', 'error');
+    };
+    
+    recognition.onend = () => {
+      $('btn-voice').classList.remove('active');
+    };
   });
 }
 
